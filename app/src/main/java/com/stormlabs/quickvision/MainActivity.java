@@ -5,83 +5,126 @@ import android.graphics.BitmapFactory;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.nio.ByteBuffer;
+import java.util.zip.Deflater;
 
 public class MainActivity extends AppCompatActivity {
 
-    final String TAG = "QuickVision";
+    final static String TAG = "QuickVision";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //Getting the photo byte array
-        InputStream stream = getResources().openRawResource(getResources().getIdentifier(
+        Button button = (Button) findViewById(R.id.button);
+        button.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                sendImage();
+            }
+        });
+
+    }
+
+    private void sendImage(){
+
+        // Getting the photo bitmap
+        InputStream imgStream = getResources().openRawResource(getResources().getIdentifier(
                 "img1",
                 "raw",
                 getPackageName()));
+        Bitmap bitmap = BitmapFactory.decodeStream(imgStream);
 
-        Bitmap bitmap = BitmapFactory.decodeStream(stream);
+        // Compressing to JPEG with low quality
+        ByteArrayOutputStream tmpStream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 0, tmpStream);
+        byte[] jpgByteArray = tmpStream.toByteArray();
 
+        // Closing streams
         try {
-            stream.close();
+            tmpStream.close();
+            imgStream.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        List<Integer> indexList = new ArrayList<Integer>();
+        //Compressing with zlib
+        Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
+        deflater.setInput(jpgByteArray);
+        deflater.finish();
 
-        int bmHeight = bitmap.getHeight();
-        int bmWidth = bitmap.getWidth();
-        int index = 0;
-
-        for (int i = 0; i < bmHeight; i++) {
-            for (int j = 0 ; j < bitmap.getWidth(); j++) {
-                if(bitmap.getPixel(i,j) != -1) {
-                    indexList.add(index);
-                }
-                index += 1;
-            }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        while (!deflater.finished()) {
+            int byteCount = deflater.deflate(buf);
+            baos.write(buf, 0, byteCount);
         }
+        deflater.end();
+        byte[] compressedBytes = baos.toByteArray();
 
-
-        for (int i = 0; i < indexList.size(); i++) {
-
-
-
-        }
+        // Sending via UDP
+        (new Thread(new ClientSend(compressedBytes))).start();
 
     }
 
 
-    private byte[] streamToByteArray(InputStream stream){
+    public class ClientSend implements Runnable {
 
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        byte[] result = null;
+        byte[] dataToSend = null;
+        final String serverIP = "192.168.0.5";
+        final int serverPort = 10000;
 
-        try {
-
-            int nRead;
-            byte[] data = new byte[4096];
-
-            while ((nRead = stream.read(data, 0, data.length)) != -1) {
-                buffer.write(data, 0, nRead);
-            }
-
-            buffer.flush();
-            result = buffer.toByteArray();
-
-        } catch (IOException e) {
-            e.printStackTrace();
+        ClientSend(byte[] data){
+            this.dataToSend = data;
         }
 
-        return result;
+        @Override
+        public void run() {
+            try {
+
+                DatagramSocket udpSocket = new DatagramSocket(6000);
+
+                InetAddress serverAddr = InetAddress.getByName(serverIP);
+                byte[] buf = ("The String to Send").getBytes();
+
+                byte[] timeStamp = ByteBuffer.allocate(Long.SIZE / Byte.SIZE)
+                        .putLong(System.currentTimeMillis()).array();
+
+                // Calculating packets
+                int packetsNum = this.dataToSend.length/256 + 1;
+                for (int i = 0; i < packetsNum; i++) {
+
+
+
+
+
+                }
+
+
+
+
+                DatagramPacket packet = new DatagramPacket(buf, buf.length, serverAddr, serverPort);
+                for (int i = 0 ; i < 10; i++){
+                    udpSocket.send(packet);
+                    Log.d(TAG,"Packet sent");
+                }
+
+            } catch (SocketException e) {
+                Log.e("Udp:", "Socket Error:", e);
+            } catch (IOException e) {
+                Log.e("Udp Send:", "IO Error:", e);
+            }
+        }
     }
 }
