@@ -17,6 +17,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.zip.Deflater;
 
 public class MainActivity extends AppCompatActivity {
@@ -94,30 +95,28 @@ public class MainActivity extends AppCompatActivity {
             try {
 
                 DatagramSocket udpSocket = new DatagramSocket(6000);
-
                 InetAddress serverAddr = InetAddress.getByName(serverIP);
+
                 byte[] buf = ("The String to Send").getBytes();
 
                 byte[] timeStamp = ByteBuffer.allocate(Long.SIZE / Byte.SIZE)
                         .putLong(System.currentTimeMillis()).array();
 
-                // Calculating packets
-                int packetsNum = this.dataToSend.length/256 + 1;
-                for (int i = 0; i < packetsNum; i++) {
+                // Getting the number of packets needed to send the data
+                int packsNum = dataToSend.length / 256;
+                if( dataToSend.length % 256 > 0 ) packsNum += 1;
 
-
-
-
-
-                }
-
-
-
-
-                DatagramPacket packet = new DatagramPacket(buf, buf.length, serverAddr, serverPort);
-                for (int i = 0 ; i < 10; i++){
+                int base = 0;
+                for (int i = 0; i < packsNum; i++) {
+                    ByteBuffer buff = ByteBuffer.allocate(256 + timeStamp.length + 2 * Integer.SIZE / Byte.SIZE);
+                    buff.put(timeStamp);
+                    buff.putInt(i);
+                    buff.putInt(packsNum);
+                    buff.put(Arrays.copyOfRange(dataToSend, base, base + 256));
+                    DatagramPacket packet = new DatagramPacket(buff.array(), buff.array().length, serverAddr, serverPort);
                     udpSocket.send(packet);
-                    Log.d(TAG,"Packet sent");
+                    Log.d(TAG, "sent " + packet.getLength() + " bytes");
+                    base += 256;
                 }
 
             } catch (SocketException e) {
