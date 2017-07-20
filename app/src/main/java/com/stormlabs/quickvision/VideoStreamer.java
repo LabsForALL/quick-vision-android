@@ -6,7 +6,6 @@ import android.util.Log;
 
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
-import org.opencv.imgproc.Imgproc;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -26,7 +25,7 @@ class VideoStreamer extends Thread {
     private int serverPort;
     private DatagramSocket udpSocket;
     private InetAddress serverAddr;
-    private Mat tmpMat;
+    private long framesCounter = 0;
 
 
     VideoStreamer(String serverIP, int serverPort, int localPort) throws SocketException, UnknownHostException {
@@ -44,12 +43,15 @@ class VideoStreamer extends Thread {
     public void run() {
 
         this.isStopped = false;
-        this.tmpMat = new Mat();
+
+        StreamAnalyzer streamAnalyzer = new StreamAnalyzer();
+        streamAnalyzer.run();
 
         while (!isStopped) {
             if (lastFrame != null) {
                 try {
                     sendLastFrame();
+                    framesCounter += 1;
                     Thread.sleep(100);
                 } catch (IOException|InterruptedException e) {
                     e.printStackTrace();
@@ -57,8 +59,7 @@ class VideoStreamer extends Thread {
             }
         }
 
-        this.tmpMat.release();
-        this.tmpMat = null;
+        streamAnalyzer.stop();
         udpSocket.close();
     }
 
@@ -121,6 +122,32 @@ class VideoStreamer extends Thread {
     void stopStreaming(){
         this.isStopped = true;
         this.lastFrame = null;
+    }
+
+
+    private class StreamAnalyzer implements Runnable{
+
+        private boolean isStopped;
+
+        @Override
+        public void run() {
+            isStopped = false;
+            long prevCount = 0;
+
+            while (!isStopped){
+                try {
+                    Log.d(MainActivity.TAG, "Frames sent per second: " + (framesCounter - prevCount));
+                    prevCount = framesCounter;
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        void stop() {
+            this.isStopped = true;
+        }
     }
 
 }
