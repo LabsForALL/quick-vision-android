@@ -44,9 +44,6 @@ class VideoStreamer extends Thread {
 
         this.isStopped = false;
 
-        StreamAnalyzer streamAnalyzer = new StreamAnalyzer();
-        streamAnalyzer.run();
-
         while (!isStopped) {
             if (lastFrame != null) {
                 try {
@@ -59,7 +56,6 @@ class VideoStreamer extends Thread {
             }
         }
 
-        streamAnalyzer.stop();
         udpSocket.close();
     }
 
