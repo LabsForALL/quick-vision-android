@@ -7,11 +7,15 @@ import android.graphics.Bitmap;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.os.Bundle;
+import android.widget.Toast;
 
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.imgproc.Imgproc;
+
+import java.net.SocketException;
+import java.net.UnknownHostException;
 
 public class MainActivity extends Activity
         implements CameraBridgeViewBase.CvCameraViewListener2 {
@@ -20,11 +24,13 @@ public class MainActivity extends Activity
         System.loadLibrary("opencv_java3");
     }
 
-    private static final String  TAG = "QuickVision";
+    public static final String  TAG = "QuickVision";
     private static final int MY_PERMISSIONS_REQUEST_CAMERA = 99;
     private CameraBridgeViewBase mOpenCvCameraView;
-    private Mat tmpMat;
+    private VideoStreamer videoStreamer;
 
+
+    /* Activity lifecycle methods */
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,21 +40,30 @@ public class MainActivity extends Activity
         // Setting up the camera view
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
         mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
-        mOpenCvCameraView.enableFpsMeter();
+        mOpenCvCameraView.setMaxFrameSize(256,256);
         mOpenCvCameraView.setCvCameraViewListener(this);
+
+    }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
 
         // Checking the camera permission and waiting for callback
         if(ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED){
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.CAMERA},
                     MY_PERMISSIONS_REQUEST_CAMERA);
+        } else {
+            mOpenCvCameraView.enableView();
         }
+
     }
 
 
     @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           String permissions[], int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         switch (requestCode) {
             case MY_PERMISSIONS_REQUEST_CAMERA: {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -65,51 +80,49 @@ public class MainActivity extends Activity
 
 
     @Override
-    public void onCameraViewStarted(int width, int height) {
-        tmpMat = new Mat();
-    }
-
-
-    @Override
-    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-
-        Mat rgba = inputFrame.rgba();
-
-        Imgproc.cvtColor(tmpMat, rgba, Imgproc.COLOR_GRAY2BGRA, 4);
-        Imgproc.Canny(rgba, tmpMat, 80, 100);
-
-        /*
-        int length = (int) (rgba.total() * rgba.elemSize());
-        byte buffer[] = new byte[length];
-        rgba.get(0, 0, buffer);
-        */
-
-        Bitmap tmpBitmap = Bitmap.createBitmap(rgba.cols(), rgba.rows(), Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(rgba, tmpBitmap);
-
-
-        return rgba;
-    }
-
-
-    @Override
-    public void onCameraViewStopped() {
-        if (tmpMat != null)
-            tmpMat.release();
-        tmpMat = null;
-    }
-
-
-    @Override
     public void onPause() {
         super.onPause();
         if (mOpenCvCameraView != null) mOpenCvCameraView.disableView();
     }
 
 
+    @Override
     public void onDestroy() {
         super.onDestroy();
         if (mOpenCvCameraView != null) mOpenCvCameraView.disableView();
+    }
+
+
+    /* Camera lifecycle methods */
+
+    @Override
+    public void onCameraViewStarted(int width, int height) {
+
+        // Setting up the video streamer
+        try {
+            videoStreamer = new VideoStreamer("195.168.0.5", 1000, 6000);
+            videoStreamer.start();
+        }catch (SocketException|UnknownHostException e){
+            e.printStackTrace();
+            Toast.makeText(getApplicationContext(), "Network error occurred", Toast.LENGTH_SHORT).show();
+            finish();
+        }
+
+    }
+
+
+    @Override
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+        // Getting the frame as mat
+        Mat rgba = inputFrame.rgba();
+        videoStreamer.setLastFrame(rgba);
+        return rgba;
+    }
+
+
+    @Override
+    public void onCameraViewStopped() {
+        videoStreamer.stopStreaming();
     }
 
 }
