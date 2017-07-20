@@ -1,129 +1,115 @@
 package com.stormlabs.quickvision;
 
+import android.Manifest;
+import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.support.v7.app.AppCompatActivity;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.os.Bundle;
-import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.Toast;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.zip.Deflater;
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.imgproc.Imgproc;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity
+        implements CameraBridgeViewBase.CvCameraViewListener2 {
 
-    final static String TAG = "QuickVision";
+    static{
+        System.loadLibrary("opencv_java3");
+    }
+
+    private static final String  TAG = "QuickVision";
+    private static final int MY_PERMISSIONS_REQUEST_CAMERA = 99;
+    private CameraBridgeViewBase mOpenCvCameraView;
+    private Mat tmpMat;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Button button = (Button) findViewById(R.id.button);
-        button.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                sendImage();
-            }
-        });
+        // Setting up the camera view
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
+        mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
+        mOpenCvCameraView.enableFpsMeter();
+        mOpenCvCameraView.setCvCameraViewListener(this);
 
-    }
-
-    private void sendImage(){
-
-        // Getting the photo bitmap
-        InputStream imgStream = getResources().openRawResource(getResources().getIdentifier(
-                "img1",
-                "raw",
-                getPackageName()));
-        Bitmap bitmap = BitmapFactory.decodeStream(imgStream);
-
-        // Compressing to JPEG with low quality
-        ByteArrayOutputStream tmpStream = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 0, tmpStream);
-        byte[] jpgByteArray = tmpStream.toByteArray();
-
-        // Closing streams
-        try {
-            tmpStream.close();
-            imgStream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
+        // Checking the camera permission and waiting for callback
+        if(ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED){
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA},
+                    MY_PERMISSIONS_REQUEST_CAMERA);
         }
-
-        //Compressing with zlib
-        Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
-        deflater.setInput(jpgByteArray);
-        deflater.finish();
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
-        while (!deflater.finished()) {
-            int byteCount = deflater.deflate(buf);
-            baos.write(buf, 0, byteCount);
-        }
-        deflater.end();
-        byte[] compressedBytes = baos.toByteArray();
-
-        // Sending via UDP
-        (new Thread(new ClientSend(compressedBytes))).start();
-
     }
 
 
-    public class ClientSend implements Runnable {
-
-        byte[] dataToSend = null;
-        final String serverIP = "192.168.0.5";
-        final int serverPort = 10000;
-
-        ClientSend(byte[] data){
-            this.dataToSend = data;
-        }
-
-        @Override
-        public void run() {
-            try {
-
-                DatagramSocket udpSocket = new DatagramSocket(6000);
-                InetAddress serverAddr = InetAddress.getByName(serverIP);
-
-                byte[] buf = ("The String to Send").getBytes();
-
-                byte[] timeStamp = ByteBuffer.allocate(Long.SIZE / Byte.SIZE)
-                        .putLong(System.currentTimeMillis()).array();
-
-                // Getting the number of packets needed to send the data
-                int packsNum = dataToSend.length / 256;
-                if( dataToSend.length % 256 > 0 ) packsNum += 1;
-
-                int base = 0;
-                for (int i = 0; i < packsNum; i++) {
-                    ByteBuffer buff = ByteBuffer.allocate(256 + timeStamp.length + 2 * Integer.SIZE / Byte.SIZE);
-                    buff.put(timeStamp);
-                    buff.putInt(i);
-                    buff.putInt(packsNum);
-                    buff.put(Arrays.copyOfRange(dataToSend, base, base + 256));
-                    DatagramPacket packet = new DatagramPacket(buff.array(), buff.array().length, serverAddr, serverPort);
-                    udpSocket.send(packet);
-                    Log.d(TAG, "sent " + packet.getLength() + " bytes");
-                    base += 256;
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_REQUEST_CAMERA: {
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    // Starting processing
+                    mOpenCvCameraView.enableView();
+                } else {
+                    // Closing activity
+                    this.finish();
                 }
-
-            } catch (SocketException e) {
-                Log.e("Udp:", "Socket Error:", e);
-            } catch (IOException e) {
-                Log.e("Udp Send:", "IO Error:", e);
+                break;
             }
         }
     }
+
+
+    @Override
+    public void onCameraViewStarted(int width, int height) {
+        tmpMat = new Mat();
+    }
+
+
+    @Override
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+
+        Mat rgba = inputFrame.rgba();
+
+        Imgproc.cvtColor(tmpMat, rgba, Imgproc.COLOR_GRAY2BGRA, 4);
+        Imgproc.Canny(rgba, tmpMat, 80, 100);
+
+        /*
+        int length = (int) (rgba.total() * rgba.elemSize());
+        byte buffer[] = new byte[length];
+        rgba.get(0, 0, buffer);
+        */
+
+        Bitmap tmpBitmap = Bitmap.createBitmap(rgba.cols(), rgba.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(rgba, tmpBitmap);
+
+
+        return rgba;
+    }
+
+
+    @Override
+    public void onCameraViewStopped() {
+        if (tmpMat != null)
+            tmpMat.release();
+        tmpMat = null;
+    }
+
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (mOpenCvCameraView != null) mOpenCvCameraView.disableView();
+    }
+
+
+    public void onDestroy() {
+        super.onDestroy();
+        if (mOpenCvCameraView != null) mOpenCvCameraView.disableView();
+    }
+
 }
