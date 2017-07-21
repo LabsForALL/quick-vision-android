@@ -22,15 +22,15 @@ class VideoStreamer extends Thread {
 
     private boolean isStopped;
     private Mat lastFrame = null;
+
+    private InetAddress serverAddress;
     private int serverPort;
     private DatagramSocket udpSocket;
-    private InetAddress serverAddr;
-    private long framesCounter = 0;
 
 
     VideoStreamer(String serverIP, int serverPort, int localPort) throws SocketException, UnknownHostException {
         udpSocket = new DatagramSocket(localPort);
-        serverAddr = InetAddress.getByName(serverIP);
+        serverAddress = InetAddress.getByName(serverIP);
         this.serverPort = serverPort;
     }
 
@@ -47,9 +47,11 @@ class VideoStreamer extends Thread {
         while (!isStopped) {
             if (lastFrame != null) {
                 try {
+                    long t1 = System.currentTimeMillis();
                     sendLastFrame();
-                    framesCounter += 1;
-                    Thread.sleep(100);
+                    Thread.sleep(40);
+                    long timeToSend = System.currentTimeMillis() - t1;
+                    Log.d(MainActivity.TAG,"NFPS: " + 1000 / timeToSend);
                 } catch (IOException|InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -62,16 +64,12 @@ class VideoStreamer extends Thread {
 
     private void sendLastFrame() throws IOException{
 
-        // Applying canny edge detection
-        //Imgproc.Canny(lastFrame, tmpMat, 30, 90);
-        //Imgproc.cvtColor(tmpMat, lastFrame, Imgproc.COLOR_GRAY2RGBA, 4);
-
         // Creating bitmap and compressing to JPEG with low quality
         Bitmap tmpBitmap = Bitmap.createBitmap(lastFrame.cols(), lastFrame.rows(), Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(lastFrame, tmpBitmap);
 
         ByteArrayOutputStream tmpStream = new ByteArrayOutputStream();
-        tmpBitmap.compress(Bitmap.CompressFormat.JPEG, 0, tmpStream);
+        tmpBitmap.compress(Bitmap.CompressFormat.JPEG, 10, tmpStream);
         byte[] jpgByteArray = tmpStream.toByteArray();
         tmpStream.close();
 
@@ -105,7 +103,7 @@ class VideoStreamer extends Thread {
             buff.putInt(i);
             buff.putInt(packsNum);
             buff.put(Arrays.copyOfRange(compressedBytes, base, base + chunkSize));
-            DatagramPacket packet = new DatagramPacket(buff.array(), buff.array().length, serverAddr, serverPort);
+            DatagramPacket packet = new DatagramPacket(buff.array(), buff.array().length, serverAddress, serverPort);
             udpSocket.send(packet);
             base += chunkSize;
         }
@@ -120,30 +118,5 @@ class VideoStreamer extends Thread {
         this.lastFrame = null;
     }
 
-
-    private class StreamAnalyzer implements Runnable{
-
-        private boolean isStopped;
-
-        @Override
-        public void run() {
-            isStopped = false;
-            long prevCount = 0;
-
-            while (!isStopped){
-                try {
-                    Log.d(MainActivity.TAG, "Frames sent per second: " + (framesCounter - prevCount));
-                    prevCount = framesCounter;
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        void stop() {
-            this.isStopped = true;
-        }
-    }
 
 }
