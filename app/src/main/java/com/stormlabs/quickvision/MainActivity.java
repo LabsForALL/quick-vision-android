@@ -40,7 +40,6 @@ public class MainActivity extends Activity
         // Setting up the camera view
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
         mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
-        mOpenCvCameraView.setMaxFrameSize(256,256);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
     }
@@ -100,7 +99,7 @@ public class MainActivity extends Activity
 
         // Setting up the video streamer
         try {
-            videoStreamer = new VideoStreamer("195.168.0.5", 1000, 6000);
+            videoStreamer = new VideoStreamer("192.168.0.20", 10000, 6000);
             videoStreamer.start();
         }catch (SocketException|UnknownHostException e){
             e.printStackTrace();

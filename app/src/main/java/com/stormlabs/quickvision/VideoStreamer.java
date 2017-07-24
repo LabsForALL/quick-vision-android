@@ -2,6 +2,7 @@ package com.stormlabs.quickvision;
 
 
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.util.Log;
 
 import org.opencv.android.Utils;
@@ -50,8 +51,7 @@ class VideoStreamer extends Thread {
                     long t1 = System.currentTimeMillis();
                     sendLastFrame();
                     Thread.sleep(40);
-                    long timeToSend = System.currentTimeMillis() - t1;
-                    Log.d(MainActivity.TAG,"NFPS: " + 1000 / timeToSend);
+                    Log.d(MainActivity.TAG,"NFPS: " + 1000 / (System.currentTimeMillis() - t1));
                 } catch (IOException|InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -67,9 +67,10 @@ class VideoStreamer extends Thread {
         // Creating bitmap and compressing to JPEG with low quality
         Bitmap tmpBitmap = Bitmap.createBitmap(lastFrame.cols(), lastFrame.rows(), Bitmap.Config.ARGB_8888);
         Utils.matToBitmap(lastFrame, tmpBitmap);
+        Bitmap resized = Bitmap.createScaledBitmap(tmpBitmap, 256, 256, false);
 
         ByteArrayOutputStream tmpStream = new ByteArrayOutputStream();
-        tmpBitmap.compress(Bitmap.CompressFormat.JPEG, 10, tmpStream);
+        resized.compress(Bitmap.CompressFormat.JPEG, 10, tmpStream);
         byte[] jpgByteArray = tmpStream.toByteArray();
         tmpStream.close();
 
