@@ -116,7 +116,6 @@ class VideoStreamer extends Thread {
 
     void stopStreaming(){
         this.isStopped = true;
-        this.lastFrame = null;
     }
 
 
