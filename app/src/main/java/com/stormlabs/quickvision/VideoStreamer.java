@@ -51,7 +51,7 @@ class VideoStreamer extends Thread {
                     long t1 = System.currentTimeMillis();
                     sendLastFrame();
                     Thread.sleep(40);
-                    Log.d(MainActivity.TAG,"NFPS: " + 1000 / (System.currentTimeMillis() - t1));
+                    Log.d(VideoActivity.TAG,"NFPS: " + 1000 / (System.currentTimeMillis() - t1));
                 } catch (IOException|InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -109,7 +109,7 @@ class VideoStreamer extends Thread {
             base += chunkSize;
         }
 
-        Log.d(MainActivity.TAG, "frame sent with length: " + compressedBytes.length );
+        Log.d(VideoActivity.TAG, "frame sent with length: " + compressedBytes.length );
 
     }
 

@@ -1,127 +1,65 @@
 package com.stormlabs.quickvision;
 
-import android.Manifest;
+
 import android.app.Activity;
-import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
+import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.EditText;
 import android.widget.Toast;
 
-import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.Utils;
-import org.opencv.core.Mat;
-import org.opencv.imgproc.Imgproc;
+import java.util.regex.Pattern;
 
-import java.net.SocketException;
-import java.net.UnknownHostException;
+public class MainActivity extends Activity {
 
-public class MainActivity extends Activity
-        implements CameraBridgeViewBase.CvCameraViewListener2 {
+    public static final String IP = "ip";
+    public static final String PORT = "port";
 
-    static{
-        System.loadLibrary("opencv_java3");
-    }
+    private EditText serverText;
+    private EditText portText;
 
-    public static final String  TAG = "QuickVision";
-    private static final int MY_PERMISSIONS_REQUEST_CAMERA = 99;
-    private CameraBridgeViewBase mOpenCvCameraView;
-    private VideoStreamer videoStreamer;
-
-
-    /* Activity lifecycle methods */
+    private static final Pattern PATTERN = Pattern.compile(
+            "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$");
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        // Setting up the camera view
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.image_manipulations_activity_surface_view);
-        mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
-        mOpenCvCameraView.setCvCameraViewListener(this);
-
+        serverText = findViewById(R.id.serverIP);
+        portText = findViewById(R.id.serverPort);
     }
 
+    /** Called when the user taps the start button */
+    public void startStreaming(View view) {
 
-    @Override
-    protected void onResume() {
-        super.onResume();
 
-        // Checking the camera permission and waiting for callback
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED){
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.CAMERA},
-                    MY_PERMISSIONS_REQUEST_CAMERA);
-        } else {
-            mOpenCvCameraView.enableView();
+        String ip = serverText.getText().toString();
+        String port = portText.getText().toString();
+
+        if(!validateIP(ip)){
+            Toast.makeText(this,"Please enter correct IP address",Toast.LENGTH_SHORT).show();
+            return;
         }
 
-    }
-
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_CAMERA: {
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // Starting processing
-                    mOpenCvCameraView.enableView();
-                } else {
-                    // Closing activity
-                    this.finish();
-                }
-                break;
-            }
-        }
-    }
-
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        if (mOpenCvCameraView != null) mOpenCvCameraView.disableView();
-    }
-
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        if (mOpenCvCameraView != null) mOpenCvCameraView.disableView();
-    }
-
-
-    /* Camera lifecycle methods */
-
-    @Override
-    public void onCameraViewStarted(int width, int height) {
-
-        // Setting up the video streamer
-        try {
-            videoStreamer = new VideoStreamer("192.168.0.20", 10000, 6000);
-            videoStreamer.start();
-        }catch (SocketException|UnknownHostException e){
-            e.printStackTrace();
-            Toast.makeText(getApplicationContext(), "Network error occurred", Toast.LENGTH_SHORT).show();
-            finish();
+        if(!validatePort(port)){
+            Toast.makeText(this,"Please enter correct port number",Toast.LENGTH_SHORT).show();
+            return;
         }
 
+        Intent videoIntent = new Intent(this, VideoActivity.class);
+        videoIntent.putExtra(IP, ip);
+        videoIntent.putExtra(PORT, port);
+
+        startActivity(videoIntent);
+
     }
 
-
-    @Override
-    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        // Getting the frame as mat
-        Mat rgba = inputFrame.rgba();
-        videoStreamer.setLastFrame(rgba);
-        return rgba;
+    public static boolean validateIP(final String ip) {
+        return PATTERN.matcher(ip).matches();
     }
 
-
-    @Override
-    public void onCameraViewStopped() {
-        videoStreamer.stopStreaming();
+    public static boolean validatePort(final String port) {
+        Integer portNum = Integer.parseInt(port);
+        return portNum > 0 && portNum < 65536 ;
     }
-
 }
